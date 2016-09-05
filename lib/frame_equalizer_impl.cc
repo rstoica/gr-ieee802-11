@@ -40,7 +40,8 @@ frame_equalizer_impl::frame_equalizer_impl(Equalizer algo, double freq, double b
 			gr::io_signature::make(1, 1, 64 * sizeof(gr_complex)),
 			gr::io_signature::make(1, 1, 48)),
 	d_current_symbol(0), d_log(log), d_debug(debug), d_equalizer(NULL),
-	d_freq(freq), d_bw(bw), d_frame_bytes(0), d_frame_symbols(0) {
+	d_freq(freq), d_bw(bw), d_frame_bytes(0), d_frame_symbols(0),
+	d_freq_offset_from_synclong(0.0) {
 
 	message_port_register_out(pmt::mp("symbols"));
 
@@ -139,6 +140,7 @@ frame_equalizer_impl::general_work (int noutput_items,
 			d_frame_symbols = 0;
 			d_frame_mod = d_bpsk;
 
+			d_freq_offset_from_synclong = pmt::to_double(tags.front().value) * d_bw;
 			d_epsilon0 = pmt::to_double(tags.front().value) * d_bw / (2 * M_PI * d_freq);
 			d_er = 0;
 
@@ -215,12 +217,16 @@ frame_equalizer_impl::general_work (int noutput_items,
 
 			if(decode_signal_field(out + o * 48)) {
 
+				pmt::pmt_t dict = pmt::make_dict();
+				dict = pmt::dict_add(dict, pmt::mp("frame_bytes"), pmt::from_uint64(d_frame_bytes));
+				dict = pmt::dict_add(dict, pmt::mp("encoding"), pmt::from_uint64(d_frame_encoding));
+				dict = pmt::dict_add(dict, pmt::mp("snr"), pmt::from_double(d_equalizer->get_snr()));
+				dict = pmt::dict_add(dict, pmt::mp("freq"), pmt::from_double(d_freq));
+				dict = pmt::dict_add(dict, pmt::mp("freq_offset"), pmt::from_double(d_freq_offset_from_synclong));
 				add_item_tag(0, nitems_written(0) + o,
 						pmt::string_to_symbol("wifi_start"),
-						pmt::make_tuple(pmt::from_uint64(d_frame_bytes),
-								pmt::from_uint64(d_frame_encoding),
-								pmt::from_double(d_equalizer->get_snr())),
-						pmt::string_to_symbol(name()));
+						dict,
+						pmt::string_to_symbol(alias()));
 
                 dout << "snr dB:" << d_equalizer->get_snr() << std::endl;
 
@@ -345,7 +351,7 @@ frame_equalizer_impl::parse_signal(uint8_t *decoded_bits) {
 		d_frame_mod = d_64qam;
 		dout << "Encoding: 27 Mbit/s   ";
 		break;
-    default:
+	default:
 		dout << "unknown encoding" << std::endl;
 		return false;
 	}
