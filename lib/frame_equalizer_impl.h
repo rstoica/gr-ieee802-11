@@ -50,6 +50,7 @@ private:
 	bool decode_signal_field(uint8_t *rx_bits);
 	void deinterleave(uint8_t *rx_bits);
 
+    Equalizer d_equalizer_type;
 	equalizer::base *d_equalizer;
 	gr::thread::mutex d_mutex;
 	std::vector<gr::tag_t> tags;

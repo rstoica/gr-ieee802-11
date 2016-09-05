@@ -102,6 +102,7 @@ list(APPEND gr_ieee802_11_sources
     equalizer/ls.cc
     equalizer/lms.cc
     equalizer/sta.cc
+    equalizer/sof.cc
     ether_encap_impl.cc
     frame_equalizer_impl.cc
     mac.cc

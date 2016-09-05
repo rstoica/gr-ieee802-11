@@ -28,6 +28,7 @@ enum Equalizer {
 	LMS  = 1,
 	COMB = 2,
 	STA  = 3,
+    SOF  = 4,
 };
 
 namespace gr {

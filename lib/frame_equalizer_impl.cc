@@ -21,6 +21,7 @@
 #include "equalizer/lms.h"
 #include "equalizer/ls.h"
 #include "equalizer/sta.h"
+#include "equalizer/sof.h"
 #include "utils.h"
 #include <gnuradio/io_signature.h>
 
@@ -63,6 +64,8 @@ frame_equalizer_impl::set_algorithm(Equalizer algo) {
 	gr::thread::scoped_lock lock(d_mutex);
 	delete d_equalizer;
 
+    dout << "Algo selection -> " << algo << std::endl;
+
 	switch(algo) {
 
 	case COMB:
@@ -78,12 +81,17 @@ frame_equalizer_impl::set_algorithm(Equalizer algo) {
 		d_equalizer = new equalizer::lms();
 		break;
 	case STA:
-		dout << "Comb" << std::endl;
+        dout << "STA" << std::endl;
 		d_equalizer = new equalizer::sta();
 		break;
+    case SOF:
+        dout << "SOF" << std::endl;
+        d_equalizer = new equalizer::sof();
+        break;
 	default:
 		throw std::runtime_error("Algorithm not implemented");
 	}
+    d_equalizer_type = algo;
 }
 
 void
@@ -213,6 +221,15 @@ frame_equalizer_impl::general_work (int noutput_items,
 								pmt::from_uint64(d_frame_encoding),
 								pmt::from_double(d_equalizer->get_snr())),
 						pmt::string_to_symbol(name()));
+
+                dout << "snr dB:" << d_equalizer->get_snr() << std::endl;
+
+                if(d_equalizer_type == SOF) {
+                    equalizer::sof *ptr = dynamic_cast<equalizer::sof*> (d_equalizer);
+                    if (ptr) {
+                        ptr->set_ofdm_frame_params((Encoding)d_frame_encoding, d_frame_bytes);
+                    }
+                }
 			}
 		}
 
@@ -252,10 +269,14 @@ frame_equalizer_impl::deinterleave(uint8_t *rx_bits) {
 bool
 frame_equalizer_impl::parse_signal(uint8_t *decoded_bits) {
 
+
+    dout << "SIGNAL field parsing" << std::endl;
+
 	int r = 0;
 	d_frame_bytes = 0;
 	bool parity = false;
 	for(int i = 0; i < 17; i++) {
+        dout << "bit #" << i << ": " << decoded_bits[i] << std::endl;
 		parity ^= decoded_bits[i];
 
 		if((i < 4) && decoded_bits[i]) {
@@ -271,6 +292,9 @@ frame_equalizer_impl::parse_signal(uint8_t *decoded_bits) {
 		dout << "SIGNAL: wrong parity" << std::endl;
 		return false;
 	}
+
+    dout << "Decoded rate:" << r << std::endl;
+    dout << "Decoded d_frame_bytes:" << d_frame_bytes << std::endl;
 
 	switch(r) {
 	case 11:
@@ -321,7 +345,7 @@ frame_equalizer_impl::parse_signal(uint8_t *decoded_bits) {
 		d_frame_mod = d_64qam;
 		dout << "Encoding: 27 Mbit/s   ";
 		break;
-	defaul:
+    default:
 		dout << "unknown encoding" << std::endl;
 		return false;
 	}
